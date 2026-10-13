@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Window Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #d1d5db;
+            outline: none;
+        }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            transition: background .15s ease-in-out;
+        }
+        .slider::-webkit-slider-thumb:hover { background: #2563eb; }
+        .glass-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 24px;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 text-gray-800">
+
+<div class="max-w-5xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row justify-between items-center bg-blue-600 text-white p-6 rounded-2xl shadow-lg">
+        <div>
+            <h1 class="text-3xl font-bold"><i class="fa-solid fa-house-signal mr-2"></i> Smart Window Controller</h1>
+            <p class="text-blue-200 mt-1">Monitor sensors and automate servos</p>
+        </div>
+        
+        <!-- Connection Setup -->
+        <div class="mt-4 md:mt-0 flex gap-2 w-full md:w-auto">
+            <input type="text" id="esp-ip" placeholder="ESP32 IP (e.g. 192.168.1.100)" 
+                   class="px-4 py-2 rounded-lg text-gray-800 w-full md:w-64 focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <button onclick="saveIP()" class="bg-blue-800 hover:bg-blue-900 px-4 py-2 rounded-lg font-semibold transition-colors">
+                Connect
+            </button>
+        </div>
+    </header>
+
+    <!-- Connection Status -->
+    <div id="status-bar" class="hidden rounded-lg p-3 text-center font-medium shadow-sm transition-all"></div>
+
+    <!-- Sensor Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        
+        <!-- Temperature -->
+        <div class="glass-card flex items-center space-x-4 border-l-4 border-orange-500">
+            <div class="p-3 bg-orange-100 text-orange-500 rounded-full">
+                <i class="fa-solid fa-temperature-half text-2xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Temperature</p>
+                <h3 class="text-2xl font-bold"><span id="temp-val">--</span>°C</h3>
+            </div>
+        </div>
+
+        <!-- Humidity -->
+        <div class="glass-card flex items-center space-x-4 border-l-4 border-blue-400">
+            <div class="p-3 bg-blue-100 text-blue-500 rounded-full">
+                <i class="fa-solid fa-droplet text-2xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Humidity</p>
+                <h3 class="text-2xl font-bold"><span id="hum-val">--</span>%</h3>
+            </div>
+        </div>
+
+        <!-- Light Level -->
+        <div class="glass-card flex items-center space-x-4 border-l-4 border-yellow-400">
+            <div class="p-3 bg-yellow-100 text-yellow-500 rounded-full">
+                <i class="fa-solid fa-sun text-2xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Light Intensity</p>
+                <h3 class="text-2xl font-bold"><span id="light-val">--</span></h3>
+            </div>
+        </div>
+
+        <!-- Rain Status -->
+        <div id="rain-card" class="glass-card flex items-center space-x-4 border-l-4 border-gray-400 transition-colors duration-300">
+            <div id="rain-icon-bg" class="p-3 bg-gray-100 text-gray-500 rounded-full transition-colors">
+                <i id="rain-icon" class="fa-solid fa-cloud text-2xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Weather</p>
+                <h3 id="rain-val" class="text-2xl font-bold">Clear</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Master Controls -->
+    <div class="glass-card mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-layer-group text-blue-500 mr-2"></i> Master Control (All Windows)</h2>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <button onclick="masterAction(100)" class="quick-btn master-btn bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold shadow-md transition-all flex items-center justify-center">
+                <i class="fa-solid fa-maximize mr-2"></i> Open Full
+            </button>
+            <button onclick="masterAction(50)" class="quick-btn master-btn bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl font-semibold shadow-md transition-all flex items-center justify-center">
+                <i class="fa-solid fa-arrows-left-right-to-line mr-2"></i> Half Open
+            </button>
+            <button onclick="masterAction(0)" class="quick-btn master-btn bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-xl font-semibold shadow-md transition-all flex items-center justify-center">
+                <i class="fa-solid fa-minimize mr-2"></i> Close All
+            </button>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Servo 1 Control -->
+        <div class="glass-card">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold"><i class="fa-solid fa-door-open text-blue-500 mr-2"></i> Window 1 (Servo 1)</h2>
+                <span class="bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full"><span id="servo1-badge">0</span>°</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mb-4">
+                <button onclick="quickAction(1, 100)" class="quick-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-700 py-2 rounded-lg text-sm font-semibold transition-colors border border-gray-200 shadow-sm">Open Full</button>
+                <button onclick="quickAction(1, 50)" class="quick-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-700 py-2 rounded-lg text-sm font-semibold transition-colors border border-gray-200 shadow-sm">Half</button>
+                <button onclick="quickAction(1, 0)" class="quick-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-700 py-2 rounded-lg text-sm font-semibold transition-colors border border-gray-200 shadow-sm">Close</button>
+            </div>
+            <input type="range" min="0" max="100" value="0" class="slider" id="servo1-slider" onchange="setServo(1, this.value)">
+            <div class="flex justify-between text-xs text-gray-400 mt-2 font-medium">
+                <span>0° (Closed)</span>
+                <span>50° (Half)</span>
+                <span>100° (Open)</span>
+            </div>
+        </div>
+
+        <!-- Servo 2 Control -->
+        <div class="glass-card">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold"><i class="fa-solid fa-door-open text-blue-500 mr-2"></i> Window 2 (Servo 2)</h2>
+                <span class="bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full"><span id="servo2-badge">0</span>°</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mb-4">
+                <button onclick="quickAction(2, 100)" class="quick-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-700 py-2 rounded-lg text-sm font-semibold transition-colors border border-gray-200 shadow-sm">Open Full</button>
+                <button onclick="quickAction(2, 50)" class="quick-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-700 py-2 rounded-lg text-sm font-semibold transition-colors border border-gray-200 shadow-sm">Half</button>
+                <button onclick="quickAction(2, 0)" class="quick-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-700 py-2 rounded-lg text-sm font-semibold transition-colors border border-gray-200 shadow-sm">Close</button>
+            </div>
+            <input type="range" min="0" max="100" value="0" class="slider" id="servo2-slider" onchange="setServo(2, this.value)">
+            <div class="flex justify-between text-xs text-gray-400 mt-2 font-medium">
+                <span>0° (Closed)</span>
+                <span>50° (Half)</span>
+                <span>100° (Open)</span>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+<script>
+    let espIP = localStorage.getItem('esp_ip') || '';
+    let isFetching = false;
+    let rainLockActive = false;
+    
+    // Initialize input with saved IP
+    if(espIP) document.getElementById('esp-ip').value = espIP;
+
+    function saveIP() {
+        const ipInput = document.getElementById('esp-ip').value.trim();
+        if(ipInput) {
+            // Basic prefixing to ensure URL format
+            espIP = ipInput.startsWith('http') ? ipInput : `http://${ipInput}`;
+            localStorage.setItem('esp_ip', espIP);
+            showStatus("Connecting...", "bg-yellow-100 text-yellow-800");
+            fetchData(); // Trigger immediate fetch
+        } else {
+            showStatus("Please enter a valid IP address", "bg-red-100 text-red-800");
+        }
+    }
+
+    function showStatus(msg, classes) {
+        const bar = document.getElementById('status-bar');
+        bar.className = `p-3 rounded-lg text-center font-medium shadow-sm transition-all ${classes}`;
+        bar.innerText = msg;
+        bar.classList.remove('hidden');
+    }
+
+    // Function to fetch data from ESP32
+    async function fetchData() {
+        if(!espIP || isFetching) return;
+        isFetching = true;
+
+        try {
+            const response = await fetch(`${espIP}/data`, { method: 'GET', signal: AbortSignal.timeout(3000) });
+            if (!response.ok) throw new Error('Network response was not ok');
+            
+            const data = await response.json();
+            
+            // Update UI with sensor data
+            document.getElementById('temp-val').innerText = isNaN(data.temperature) ? "--" : data.temperature.toFixed(1);
+            document.getElementById('hum-val').innerText = isNaN(data.humidity) ? "--" : data.humidity.toFixed(1);
+            document.getElementById('light-val').innerText = data.light;
+            
+            // Update Rain Status
+            updateRainStatus(data.isRaining);
+
+            // Sync servo sliders if not actively locked by raining
+            if (!data.isRaining) {
+                document.getElementById('servo1-slider').value = data.servo1;
+                document.getElementById('servo2-slider').value = data.servo2;
+                document.getElementById('servo1-badge').innerText = data.servo1;
+                document.getElementById('servo2-badge').innerText = data.servo2;
+            }
+
+            showStatus("Connected - Live Data Active", "bg-green-100 text-green-800");
+
+        } catch (error) {
+            console.error('Fetch error:', error);
+            showStatus(`Cannot connect to ESP32 at ${espIP}. Make sure you are on the same WiFi.`, "bg-red-100 text-red-800");
+        } finally {
+            isFetching = false;
+        }
+    }
+
+    function updateRainStatus(isRaining) {
+        const rainCard = document.getElementById('rain-card');
+        const rainIconBg = document.getElementById('rain-icon-bg');
+        const rainIcon = document.getElementById('rain-icon');
+        const rainVal = document.getElementById('rain-val');
+        const sliders = [document.getElementById('servo1-slider'), document.getElementById('servo2-slider')];
+        const quickBtns = document.querySelectorAll('.quick-btn');
+
+        if (isRaining) {
+            rainCard.classList.replace('border-gray-400', 'border-blue-600');
+            rainIconBg.classList.replace('bg-gray-100', 'bg-blue-600');
+            rainIconBg.classList.replace('text-gray-500', 'text-white');
+            rainIcon.className = "fa-solid fa-cloud-showers-heavy text-2xl animate-bounce";
+            rainVal.innerText = "RAINING!";
+            rainVal.classList.add('text-blue-600');
+            
+            // Lock UI controls
+            rainLockActive = true;
+            sliders.forEach(s => {
+                s.value = 0;
+                s.disabled = true;
+                s.classList.add('opacity-50', 'cursor-not-allowed');
+            });
+            // Disable quick buttons
+            quickBtns.forEach(btn => {
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+            });
+            document.getElementById('servo1-badge').innerText = "0 (LOCKED)";
+            document.getElementById('servo2-badge').innerText = "0 (LOCKED)";
+            
+        } else {
+            rainCard.classList.replace('border-blue-600', 'border-gray-400');
+            rainIconBg.classList.replace('bg-blue-600', 'bg-gray-100');
+            rainIconBg.classList.replace('text-white', 'text-gray-500');
+            rainIcon.className = "fa-solid fa-cloud text-2xl";
+            rainVal.innerText = "Clear";
+            rainVal.classList.remove('text-blue-600');
+
+            // Unlock UI controls
+            if (rainLockActive) {
+                rainLockActive = false;
+                sliders.forEach(s => {
+                    s.disabled = false;
+                    s.classList.remove('opacity-50', 'cursor-not-allowed');
+                });
+                // Enable quick buttons
+                quickBtns.forEach(btn => {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                });
+            }
+        }
+    }
+
+    // Function to handle quick action buttons
+    function quickAction(id, angle) {
+        if(rainLockActive) {
+            alert("Cannot open windows while it is raining!");
+            return;
+        }
+        
+        // Update slider visually
+        const slider = document.getElementById(`servo${id}-slider`);
+        if(slider) slider.value = angle;
+        
+        // Call the main servo function
+        setServo(id, angle);
+    }
+
+    // Function to handle master control buttons
+    function masterAction(angle) {
+        if(rainLockActive) {
+            alert("Cannot open windows while it is raining!");
+            return;
+        }
+        
+        // Update both sliders visually
+        const slider1 = document.getElementById('servo1-slider');
+        const slider2 = document.getElementById('servo2-slider');
+        if(slider1) slider1.value = angle;
+        if(slider2) slider2.value = angle;
+        
+        // Call the main servo function for both
+        setServo(1, angle);
+        // Add a tiny delay before sending the second command to prevent overloading the ESP32 web server
+        setTimeout(() => setServo(2, angle), 100);
+    }
+
+    // Function to send servo command to ESP32
+    async function setServo(id, angle) {
+        if(!espIP) return alert("Please connect to ESP32 first.");
+        
+        // Update badge locally immediately for responsive feel
+        document.getElementById(`servo${id}-badge`).innerText = angle;
+
+        try {
+            const response = await fetch(`${espIP}/servo?id=${id}&angle=${angle}`, { method: 'POST' });
+            if (response.status === 403) {
+                 alert("Cannot open windows while it is raining!");
+                 fetchData(); // Force sync back to 0
+            }
+        } catch (error) {
+            console.error('Error setting servo:', error);
+            showStatus("Command failed. Check connection.", "bg-red-100 text-red-800");
+        }
+    }
+
+    // Start polling every 2 seconds if IP is present
+    setInterval(fetchData, 2000);
+    if(espIP) fetchData();
+
+</script>
+</body>
+</html>
